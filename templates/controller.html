@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+    <h2>Dynamic Rule Engine / The Controller</h2>
+    <p>
+        This module recommends and manages firewall rules based on assessment findings,
+        open ports, and hardening requirements.
+    </p>
+</section>
+
+<section class="grid">
+    <div class="card">
+        <h3>Current Firewall Status</h3>
+        <span class="badge warning">Not Checked</span>
+        <p>UFW status will be displayed here.</p>
+    </div>
+
+    <div class="card">
+        <h3>Recommended Rules</h3>
+        <p>Example recommendation:</p>
+        <code>Deny 22/tcp and allow 2222/tcp</code>
+    </div>
+</section>
+
+<section class="card wide">
+    <h3>Feature Target</h3>
+    <ul>
+        <li>Check UFW status</li>
+        <li>Show active firewall rules</li>
+        <li>Apply default deny incoming</li>
+        <li>Allow hardened SSH port</li>
+        <li>Block default SSH port</li>
+        <li>Display before-after firewall condition</li>
+    </ul>
+</section>
+{% endblock %}

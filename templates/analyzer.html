@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+    <h2>Network Assessment & Wireshark Analyzer</h2>
+    <p>
+        This module analyzes Wireshark packet capture files to identify SSH traffic,
+        source and destination IP addresses, hardening status, and security risk level.
+    </p>
+</section>
+
+<section class="card">
+    <h3>Upload Wireshark Evidence File</h3>
+
+    <form method="POST" enctype="multipart/form-data" class="upload-form">
+        <input type="file" name="pcap_file" accept=".pcap,.pcapng" required>
+        <button type="submit">Analyze File</button>
+    </form>
+
+    {% if error %}
+        <div class="alert danger-box">{{ error }}</div>
+    {% endif %}
+</section>
+
+{% if analysis %}
+<section class="grid">
+    <div class="card">
+        <h3>File Name</h3>
+        <p>{{ filename }}</p>
+    </div>
+
+    <div class="card">
+        <h3>Capture Status</h3>
+        <span class="badge neutral">{{ analysis.status }}</span>
+    </div>
+
+    <div class="card">
+        <h3>Risk Level</h3>
+        {% if analysis.risk_level == "High" %}
+            <span class="badge danger">{{ analysis.risk_level }}</span>
+        {% elif analysis.risk_level == "Medium" %}
+            <span class="badge warning">{{ analysis.risk_level }}</span>
+        {% elif analysis.risk_level == "Low" %}
+            <span class="badge safe">{{ analysis.risk_level }}</span>
+        {% else %}
+            <span class="badge neutral">{{ analysis.risk_level }}</span>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h3>SSH Detection</h3>
+        <p>Port 22 detected: <strong>{{ analysis.detected_22 }}</strong></p>
+        <p>Port 2222 detected: <strong>{{ analysis.detected_2222 }}</strong></p>
+    </div>
+</section>
+
+<section class="card wide">
+    <h3>Security Finding</h3>
+    <p>{{ analysis.finding }}</p>
+
+    <h3>Recommendation</h3>
+    <p>{{ analysis.recommendation }}</p>
+</section>
+
+<section class="grid">
+    <div class="card">
+        <h3>SSH Packet Count</h3>
+        <p>Port 22 packets: <strong>{{ analysis.ssh_22_count }}</strong></p>
+        <p>Port 2222 packets: <strong>{{ analysis.ssh_2222_count }}</strong></p>
+    </div>
+
+    <div class="card">
+        <h3>Top IP Addresses</h3>
+        {% if analysis.top_ips %}
+            <ul>
+                {% for ip, count in analysis.top_ips %}
+                    <li>{{ ip }} — {{ count }} packets</li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>No IP data found.</p>
+        {% endif %}
+    </div>
+</section>
+
+<section class="card wide">
+    <h3>TCP Conversations Sample</h3>
+
+    {% if analysis.conversations %}
+    <table>
+        <thead>
+            <tr>
+                <th>Source IP</th>
+                <th>Destination IP</th>
+                <th>Source Port</th>
+                <th>Destination Port</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in analysis.conversations %}
+            <tr>
+                <td>{{ row.src_ip }}</td>
+                <td>{{ row.dst_ip }}</td>
+                <td>{{ row.src_port }}</td>
+                <td>{{ row.dst_port }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        <p>No TCP conversations detected.</p>
+    {% endif %}
+</section>
+{% endif %}
+{% endblock %}

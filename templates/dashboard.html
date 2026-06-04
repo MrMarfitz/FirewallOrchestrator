@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+    <h2>Firewall Orchestrator Dashboard</h2>
+    <p>
+        A local defense dashboard for small enterprise network assessment,
+        firewall rule control, SSH hardening validation, and Wireshark evidence analysis.
+    </p>
+</section>
+
+<section class="grid">
+    <div class="card">
+        <h3>Security Score</h3>
+        <div class="score">{{ summary.security_score }}/100</div>
+        <p>Initial baseline score before complete hardening.</p>
+    </div>
+
+    <div class="card">
+        <h3>Firewall Status</h3>
+        <span class="badge warning">{{ summary.firewall_status }}</span>
+        <p>UFW and traffic control status will be displayed here.</p>
+    </div>
+
+    <div class="card">
+        <h3>SSH Status</h3>
+        <span class="badge warning">{{ summary.ssh_status }}</span>
+        <p>Zero-trust SSH configuration will be validated here.</p>
+    </div>
+
+    <div class="card">
+        <h3>Wireshark Evidence</h3>
+        <span class="badge neutral">{{ summary.wireshark_status }}</span>
+        <p>Upload and analyze .pcap or .pcapng files.</p>
+    </div>
+</section>
+
+<section class="card wide">
+    <h3>Core Features</h3>
+
+    <div class="feature-list">
+        <div>
+            <h4>1. Network Assessment & Wireshark Analyzer</h4>
+            <p>Analyze packet capture files, detect SSH traffic, identify source/destination IP, and classify risk.</p>
+        </div>
+
+        <div>
+            <h4>2. Dynamic Rule Engine / The Controller</h4>
+            <p>Recommend firewall rules based on open ports, security findings, and hardening requirements.</p>
+        </div>
+
+        <div>
+            <h4>3. Zero-Trust Identity Gate / The Validator</h4>
+            <p>Validate SSH hardening such as non-default port, disabled root login, and key-based access.</p>
+        </div>
+    </div>
+</section>
+{% endblock %}

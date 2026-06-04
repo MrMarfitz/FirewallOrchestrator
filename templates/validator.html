@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+    <h2>Zero-Trust Identity Gate / The Validator</h2>
+    <p>
+        This module validates secure remote access by checking SSH hardening configuration.
+    </p>
+</section>
+
+<section class="grid">
+    <div class="card">
+        <h3>Root Login</h3>
+        <span class="badge warning">Not Checked</span>
+        <p>Target: Disabled</p>
+    </div>
+
+    <div class="card">
+        <h3>Password Authentication</h3>
+        <span class="badge warning">Not Checked</span>
+        <p>Target: Disabled after key-based access is configured</p>
+    </div>
+
+    <div class="card">
+        <h3>SSH Port</h3>
+        <span class="badge warning">Not Checked</span>
+        <p>Target: 2222 or another non-default port</p>
+    </div>
+
+    <div class="card">
+        <h3>Key-Based Authentication</h3>
+        <span class="badge warning">Not Checked</span>
+        <p>Target: Enabled</p>
+    </div>
+</section>
+
+<section class="card wide">
+    <h3>Feature Target</h3>
+    <ul>
+        <li>Read SSH configuration</li>
+        <li>Check root login policy</li>
+        <li>Check password authentication policy</li>
+        <li>Check active SSH port</li>
+        <li>Validate SSH hardening score</li>
+    </ul>
+</section>
+{% endblock %}
+
