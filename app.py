@@ -1,8 +1,8 @@
 import os
 import re
 import json
+import subprocess
 import pandas as pd
-import paramiko
 from collections import Counter
 from flask import Flask, render_template, request
 
@@ -22,7 +22,6 @@ def allowed_file(filename):
 
 def save_latest_analysis(data):
     os.makedirs(EVIDENCE_FOLDER, exist_ok=True)
-
     with open(LATEST_FILE, "w", encoding="utf-8") as file:
         json.dump(data, file, indent=4)
 
@@ -46,7 +45,6 @@ def detect_port(info_text, port):
         rf"\b{port}\s+\[",
         rf"\b{port}\b",
     ]
-
     return any(re.search(pattern, info_text, re.IGNORECASE) for pattern in patterns)
 
 
@@ -104,21 +102,18 @@ def analyze_csv(file_path, filename):
         score = 35
         finding = "SSH masih menggunakan port default 22. Ini berarti akses remote server masih mudah ditebak dan perlu hardening."
         recommendation = "Block port 22, pindahkan SSH ke port 2222, gunakan SSH key, dan aktifkan firewall default deny."
-
     elif detected_2222 and not detected_22:
         status = "After Hardening"
         risk_level = "Low"
         score = 85
         finding = "SSH sudah terdeteksi pada port 2222. Ini menunjukkan akses remote sudah lebih aman dari konfigurasi default."
         recommendation = "Pertahankan port 2222, pastikan port 22 tetap diblokir, dan review log login secara berkala."
-
     elif detected_22 and detected_2222:
         status = "Mixed Evidence"
         risk_level = "Medium"
         score = 60
         finding = "CSV menunjukkan port 22 dan 2222 sama-sama muncul. Kemungkinan data berisi kondisi sebelum dan sesudah hardening."
         recommendation = "Pisahkan capture before dan after, lalu pastikan port 22 benar-benar tidak muncul setelah hardening."
-
     else:
         status = "No SSH Evidence"
         risk_level = "Informational"
@@ -150,33 +145,38 @@ def analyze_csv(file_path, filename):
         "rows": rows,
     }
 
-def run_ssh_command(host, username, password, command):
-    try:
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-        ssh.connect(
-            hostname=host,
-            username=username,
-            password=password,
-            timeout=10
+def run_local_command(command):
+    allowed_commands = [
+        "hostname -I",
+        "/usr/sbin/ufw status verbose",
+        "/usr/sbin/ufw deny 22/tcp",
+        "/usr/sbin/ufw allow 2222/tcp",
+        "/usr/sbin/ufw default deny incoming",
+        "/usr/sbin/ufw default allow outgoing",
+        "/usr/sbin/ufw --force enable",
+        "ss -tulnp",
+    ]
+
+    if command not in allowed_commands:
+        return {
+            "success": False,
+            "output": "Command not allowed."
+        }
+
+    try:
+        result = subprocess.run(
+            command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=20
         )
 
-        stdin, stdout, stderr = ssh.exec_command(command)
-
-        output = stdout.read().decode("utf-8", errors="ignore")
-        error = stderr.read().decode("utf-8", errors="ignore")
-
-        ssh.close()
-
-        if error:
-            return {
-                "success": False,
-                "output": error
-            }
+        output = result.stdout if result.stdout else result.stderr
 
         return {
-            "success": True,
+            "success": result.returncode == 0,
             "output": output
         }
 
@@ -221,10 +221,8 @@ def analyzer():
 
         if not file or file.filename == "":
             error = "Pilih file CSV dulu."
-
         elif not allowed_file(file.filename):
             error = "Format salah. Upload file Wireshark .csv."
-
         else:
             os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -254,38 +252,45 @@ def controller():
             message="Belum ada data. Upload CSV Wireshark dulu di menu Analyzer.",
             rules=[],
             commands=[],
-            suspicious_ips=[]
+            suspicious_ips=[],
+            ssh_result=None,
+            executed_command=None
         )
 
     suspicious_ips = latest.get("top_ips", [])[:5]
 
-    commands = []
-
-    if latest.get("detected_22"):
-        commands.extend([
-            {
-                "title": "Block Default SSH Port 22",
-                "desc": "Menutup SSH port default 22 agar server tidak mudah ditebak.",
-                "command": "sudo ufw deny 22/tcp"
-            },
-            {
-                "title": "Allow Hardened SSH Port 2222",
-                "desc": "Membuka port SSH hardened untuk remote access yang lebih aman.",
-                "command": "sudo ufw allow 2222/tcp"
-            },
-            {
-                "title": "Default Deny Incoming",
-                "desc": "Menolak semua traffic masuk kecuali yang diizinkan.",
-                "command": "sudo ufw default deny incoming"
-            },
-        ])
-
-    for ip, count in suspicious_ips:
-        commands.append({
-            "title": f"Block IP {ip}",
-            "desc": f"IP ini muncul {count} kali pada traffic CSV. Gunakan jika dianggap mencurigakan.",
-            "command": f"sudo ufw deny from {ip}"
-        })
+    commands = [
+        {
+            "title": "Check Kali IP",
+            "desc": "Melihat IP server Kali.",
+            "command": "hostname -I"
+        },
+        {
+            "title": "Check UFW Status",
+            "desc": "Melihat status firewall UFW.",
+            "command": "/usr/sbin/ufw status verbose"
+        },
+        {
+            "title": "Block Default SSH Port 22",
+            "desc": "Menutup SSH port default 22.",
+            "command": "/usr/sbin/ufw deny 22/tcp"
+        },
+        {
+            "title": "Allow Hardened SSH Port 2222",
+            "desc": "Membuka port SSH hardened 2222.",
+            "command": "/usr/sbin/ufw allow 2222/tcp"
+        },
+        {
+            "title": "Default Deny Incoming",
+            "desc": "Menolak semua traffic masuk kecuali yang diizinkan.",
+            "command": "/usr/sbin/ufw default deny incoming"
+        },
+        {
+            "title": "Check Open Ports",
+            "desc": "Melihat port yang terbuka di Kali.",
+            "command": "ss -tulnp"
+        }
+    ]
 
     if latest.get("detected_22"):
         message = "Controller membaca hasil Analyzer: SSH port 22 terdeteksi. Firewall hardening diperlukan."
@@ -296,7 +301,6 @@ def controller():
             "Review top IP addresses from CSV evidence",
             "Capture ulang setelah hardening untuk bukti after"
         ]
-
     elif latest.get("detected_2222"):
         message = "Controller membaca hasil Analyzer: SSH port 2222 terdeteksi. Konfigurasi lebih aman, tetap perlu monitoring."
         rules = [
@@ -305,7 +309,6 @@ def controller():
             "Monitor failed login attempts",
             "Review firewall rule regularly"
         ]
-
     else:
         message = "Controller membaca hasil Analyzer: belum ada bukti SSH. Capture ulang traffic SSH diperlukan."
         rules = [
@@ -321,31 +324,67 @@ def controller():
         message=message,
         rules=rules,
         commands=commands,
-        suspicious_ips=suspicious_ips
+        suspicious_ips=suspicious_ips,
+        ssh_result=None,
+        executed_command=None
     )
+
 
 @app.route("/run-command", methods=["POST"])
 def run_command():
-    host = request.form.get("host")
-    username = request.form.get("username")
-    password = request.form.get("password")
     command = request.form.get("command")
-
-    result = run_ssh_command(host, username, password, command)
+    result = run_local_command(command)
 
     latest = load_latest_analysis()
 
     if latest:
         suspicious_ips = latest.get("top_ips", [])[:5]
+        rules = ["Command executed locally on Kali Linux server."]
+        message = "Local Kali Control result:"
     else:
         suspicious_ips = []
+        rules = ["Command executed locally on Kali Linux server."]
+        message = "Local Kali Control result:"
+
+    commands = [
+        {
+            "title": "Check Kali IP",
+            "desc": "Melihat IP server Kali.",
+            "command": "hostname -I"
+        },
+        {
+            "title": "Check UFW Status",
+            "desc": "Melihat status firewall UFW.",
+            "command": "/usr/sbin/ufw status verbose"
+        },
+        {
+            "title": "Block Default SSH Port 22",
+            "desc": "Menutup SSH port default 22.",
+            "command": "/usr/sbin/ufw deny 22/tcp"
+        },
+        {
+            "title": "Allow Hardened SSH Port 2222",
+            "desc": "Membuka port SSH hardened 2222.",
+            "command": "/usr/sbin/ufw allow 2222/tcp"
+        },
+        {
+            "title": "Default Deny Incoming",
+            "desc": "Menolak semua traffic masuk kecuali yang diizinkan.",
+            "command": "/usr/sbin/ufw default deny incoming"
+        },
+        {
+            "title": "Check Open Ports",
+            "desc": "Melihat port yang terbuka di Kali.",
+            "command": "ss -tulnp"
+        }
+    ]
 
     return render_template(
         "controller.html",
         latest=latest,
-        rules=["Command executed from Windows webapp to Kali Linux server."],
-        message="Live Kali Control result:",
-        commands=[],
+        rules=rules,
+        message=message,
+        commands=commands,
         suspicious_ips=suspicious_ips,
         ssh_result=result,
         executed_command=command
@@ -381,7 +420,6 @@ def validator():
             ["Root Login", "Must be disabled manually", "warning"],
             ["Password Auth", "Use SSH key-based auth", "warning"],
         ]
-
     elif latest.get("detected_22"):
         level = "Not Secure"
         score = 35
@@ -393,7 +431,6 @@ def validator():
             ["Root Login", "Check sshd_config", "warning"],
             ["Password Auth", "Disable after key setup", "warning"],
         ]
-
     else:
         level = "Partial Evidence"
         score = 50

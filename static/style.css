@@ -544,4 +544,22 @@ th {
 .error-output {
     background: #ff9675;
     color: #111;
+}.output-box {
+    white-space: pre-wrap;
+    background: #111;
+    color: #fff8e7;
+    border: 3px solid #111;
+    padding: 18px;
+    font-family: "Courier New", monospace;
+    line-height: 1.6;
+    overflow-x: auto;
+}
+
+.success-output {
+    border-color: #111;
+}
+
+.error-output {
+    background: #ff9675;
+    color: #111;
 }
