@@ -1,48 +1,82 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="hero">
-    <h2>Zero-Trust Identity Gate / The Validator</h2>
+<section class="topbar">
+    <div class="search-box">Zero-Trust SSH Validation</div>
+</section>
+
+<section class="page-title">
+    <h2>Zero-Trust Identity Gate</h2>
+</section>
+
+<section class="hero-grid">
+    <div class="main-panel pink">
+        <p class="pill">Feature 03</p>
+        <h3>The Validator</h3>
+        <p>
+            Modul ini menilai apakah akses remote ke Kali Linux server sudah aman
+            berdasarkan hasil CSV Wireshark dan target SSH hardening.
+        </p>
+
+        <div class="big-status">{{ level }}</div>
+    </div>
+
+    <div class="side-panel yellow-soft">
+        <p class="pill">Zero-Trust Score</p>
+        <h3>{{ score }}/100</h3>
+        <p>
+            Score dihitung dari evidence CSV: apakah SSH masih di port 22
+            atau sudah pindah ke port 2222.
+        </p>
+    </div>
+</section>
+
+<section class="section-head">
+    <h2>Validation Checklist</h2>
+    <span>Based on latest CSV evidence</span>
+</section>
+
+<section class="check-grid">
+    {% for item, result, style in checklist %}
+        <div class="check-card {{ style }}">
+            <span>{{ item }}</span>
+            <strong>{{ result }}</strong>
+        </div>
+    {% endfor %}
+</section>
+
+<section class="two-col">
+    <div class="info-card">
+        <h3>Hardening Target</h3>
+        <ul>
+            <li>SSH tidak memakai port default 22</li>
+            <li>SSH dipindahkan ke port 2222</li>
+            <li>Root login dimatikan</li>
+            <li>Password login dimatikan setelah SSH key siap</li>
+            <li>Firewall hanya membuka port yang dibutuhkan</li>
+        </ul>
+    </div>
+
+    <div class="info-card">
+        <h3>Kali Linux Command Checklist</h3>
+        <div class="code-block">
+sudo nano /etc/ssh/sshd_config<br>
+Port 2222<br>
+PermitRootLogin no<br>
+PasswordAuthentication no<br>
+sudo systemctl restart ssh<br>
+sudo ufw deny 22/tcp<br>
+sudo ufw allow 2222/tcp
+        </div>
+    </div>
+</section>
+
+<section class="info-card">
+    <h3>Demo Explanation</h3>
     <p>
-        This module validates secure remote access by checking SSH hardening configuration.
+        Jika Analyzer mendeteksi port 22, status server dianggap belum aman.
+        Jika Analyzer mendeteksi port 2222 dan port 22 tidak muncul,
+        maka remote access sudah lebih aman.
     </p>
 </section>
-
-<section class="grid">
-    <div class="card">
-        <h3>Root Login</h3>
-        <span class="badge warning">Not Checked</span>
-        <p>Target: Disabled</p>
-    </div>
-
-    <div class="card">
-        <h3>Password Authentication</h3>
-        <span class="badge warning">Not Checked</span>
-        <p>Target: Disabled after key-based access is configured</p>
-    </div>
-
-    <div class="card">
-        <h3>SSH Port</h3>
-        <span class="badge warning">Not Checked</span>
-        <p>Target: 2222 or another non-default port</p>
-    </div>
-
-    <div class="card">
-        <h3>Key-Based Authentication</h3>
-        <span class="badge warning">Not Checked</span>
-        <p>Target: Enabled</p>
-    </div>
-</section>
-
-<section class="card wide">
-    <h3>Feature Target</h3>
-    <ul>
-        <li>Read SSH configuration</li>
-        <li>Check root login policy</li>
-        <li>Check password authentication policy</li>
-        <li>Check active SSH port</li>
-        <li>Validate SSH hardening score</li>
-    </ul>
-</section>
 {% endblock %}
-

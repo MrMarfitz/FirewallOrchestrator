@@ -1,37 +1,175 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="hero">
-    <h2>Dynamic Rule Engine / The Controller</h2>
+<section class="topbar">
+    <div class="search-box">Firewall Action Center</div>
+</section>
+
+<section class="page-title">
+    <h2>Dynamic Rule Engine</h2>
+</section>
+
+<section class="hero-grid">
+    <div class="main-panel cyan">
+        <p class="pill">Feature 02</p>
+        <h3>The Controller</h3>
+        <p>{{ message }}</p>
+    </div>
+
+    <div class="side-panel yellow-soft">
+        <p class="pill">Latest Evidence</p>
+        {% if latest %}
+            <h3>{{ latest.status }}</h3>
+            <p>Risk Level: <b>{{ latest.risk_level }}</b></p>
+            <p>Score: <b>{{ latest.score }}</b></p>
+        {% else %}
+            <h3>No CSV Uploaded</h3>
+            <p>Upload Wireshark CSV first.</p>
+        {% endif %}
+    </div>
+</section>
+
+<section class="section-head">
+    <h2>Action Buttons</h2>
+    <span>Copy command, run manually on Kali</span>
+</section>
+
+<section class="action-grid">
+    {% if commands %}
+        {% for item in commands %}
+        <div class="action-card">
+            <h3>{{ item.title }}</h3>
+            <p>{{ item.desc }}</p>
+            <button onclick="copyCommand(`{{ item.command }}`)">Copy Command</button>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="action-card">
+            <h3>No Action Yet</h3>
+            <p>Upload CSV Wireshark first so the Controller can generate firewall actions.</p>
+        </div>
+    {% endif %}
+</section>
+
+<section class="two-col">
+    <div class="info-card">
+        <h3>Recommended Rules</h3>
+
+        {% if rules %}
+            <div class="rule-list">
+                {% for rule in rules %}
+                    <div class="rule-item">{{ rule }}</div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p>No rules generated yet.</p>
+        {% endif %}
+    </div>
+
+    <div class="info-card">
+        <h3>Important IP Candidates</h3>
+
+        {% if suspicious_ips %}
+            <ul>
+                {% for ip, count in suspicious_ips %}
+                    <li>{{ ip }} — {{ count }} packets</li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>No IP data yet.</p>
+        {% endif %}
+    </div>
+</section>
+
+<section class="info-card">
+    <h3>Full Firewall Plan</h3>
+
+    <div class="code-block" id="fullCommand">
+sudo ufw default deny incoming<br>
+sudo ufw default allow outgoing<br>
+sudo ufw deny 22/tcp<br>
+sudo ufw allow 2222/tcp<br>
+sudo ufw enable<br>
+sudo ufw status verbose
+    </div>
+
+    <button class="copy-full-btn" onclick="copyFullCommand()">Copy Full Plan</button>
+</section>
+
+<section class="info-card">
+    <h3>How to Use This</h3>
     <p>
-        This module recommends and manages firewall rules based on assessment findings,
-        open ports, and hardening requirements.
+        Copy command di halaman ini, lalu jalankan di terminal Kali Linux server.
+        Setelah itu lakukan capture ulang di Wireshark, export CSV, dan upload lagi
+        ke Analyzer untuk membuktikan hasil before-after.
     </p>
 </section>
 
-<section class="grid">
-    <div class="card">
-        <h3>Current Firewall Status</h3>
-        <span class="badge warning">Not Checked</span>
-        <p>UFW status will be displayed here.</p>
-    </div>
+<section class="info-card">
+    <h3>Live Kali Control</h3>
+    <p>
+        Run a safe defensive command directly on the Kali Linux server through SSH.
+    </p>
 
-    <div class="card">
-        <h3>Recommended Rules</h3>
-        <p>Example recommendation:</p>
-        <code>Deny 22/tcp and allow 2222/tcp</code>
-    </div>
+    <form method="POST" action="/run-command" class="ssh-form">
+        <input type="text" name="host" placeholder="Kali IP, example: 192.168.56.101" required>
+        <input type="text" name="username" placeholder="Kali username" required>
+        <input type="password" name="password" placeholder="Kali password" required>
+
+        <select name="command" required>
+            <option value="sudo ufw status verbose">Check UFW Status</option>
+            <option value="sudo ufw deny 22/tcp">Block SSH Port 22</option>
+            <option value="sudo ufw allow 2222/tcp">Allow SSH Port 2222</option>
+            <option value="sudo ufw default deny incoming">Default Deny Incoming</option>
+            <option value="sudo ss -tulnp">Check Open Ports</option>
+            <option value="hostname -I">Check Kali IP</option>
+        </select>
+
+        <button type="submit">Run on Kali</button>
+    </form>
 </section>
 
-<section class="card wide">
-    <h3>Feature Target</h3>
-    <ul>
-        <li>Check UFW status</li>
-        <li>Show active firewall rules</li>
-        <li>Apply default deny incoming</li>
-        <li>Allow hardened SSH port</li>
-        <li>Block default SSH port</li>
-        <li>Display before-after firewall condition</li>
-    </ul>
+{% if ssh_result %}
+<section class="info-card">
+    <h3>Command Output</h3>
+    <p><b>Executed:</b> {{ executed_command }}</p>
+
+    {% if ssh_result.success %}
+        <div class="output-box success-output">{{ ssh_result.output }}</div>
+    {% else %}
+        <div class="output-box error-output">{{ ssh_result.output }}</div>
+    {% endif %}
 </section>
+{% endif %}
+
+<div id="toast" class="custom-toast"></div>
+
+<script>
+function showToast(message) {
+    const toast = document.getElementById("toast");
+    toast.innerText = message;
+    toast.classList.add("show");
+
+    setTimeout(() => {
+        toast.classList.remove("show");
+    }, 2500);
+}
+
+function copyCommand(command) {
+    navigator.clipboard.writeText(command);
+    showToast("Command copied: " + command);
+}
+
+function copyFullCommand() {
+    const text = `sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw deny 22/tcp
+sudo ufw allow 2222/tcp
+sudo ufw enable
+sudo ufw status verbose`;
+
+    navigator.clipboard.writeText(text);
+    showToast("Full firewall plan copied.");
+}
+</script>
 {% endblock %}

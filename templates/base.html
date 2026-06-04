@@ -9,19 +9,23 @@
 <body>
     <aside class="sidebar">
         <div class="brand">
-            <div class="logo">FO</div>
-            <div>
-                <h1>Firewall Orchestrator</h1>
-                <p>Network Defense Dashboard</p>
-            </div>
+           <div class="logo">
+    <img src="{{ url_for('static', filename='logo.jpg') }}" alt="Firewall Orchestrator Logo">
+</div>
+            
         </div>
 
         <nav>
-            <a href="/">Dashboard</a>
-            <a href="/analyzer">Wireshark Analyzer</a>
-            <a href="/controller">Dynamic Rule Engine</a>
-            <a href="/validator">Zero-Trust Identity Gate</a>
-        </nav>
+    <a href="/"> Dashboard</a>
+    <a href="/analyzer"> Wireshark Analyzer</a>
+    <a href="/controller"> Dynamic Rule Engine<br><span></span></a>
+    <a href="/validator"> Zero-Trust Identity Gate<br><span></span></a>
+</nav>
+
+        <div class="sidebar-note">
+            <p>Protected asset</p>
+            <strong>Kali Linux Server</strong>
+        </div>
     </aside>
 
     <main class="content">
@@ -29,4 +33,3 @@
     </main>
 </body>
 </html>
-

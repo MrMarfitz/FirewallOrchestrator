@@ -1,13 +1,17 @@
 import os
-import subprocess
+import re
+import json
+import pandas as pd
+import paramiko
 from collections import Counter
 from flask import Flask, render_template, request
 
 app = Flask(__name__)
 
-APP_NAME = "Firewall Orchestrator"
 UPLOAD_FOLDER = "uploads"
-ALLOWED_EXTENSIONS = {"pcap", "pcapng"}
+EVIDENCE_FOLDER = "evidence"
+LATEST_FILE = os.path.join(EVIDENCE_FOLDER, "latest_analysis.json")
+ALLOWED_EXTENSIONS = {"csv"}
 
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
@@ -16,105 +20,194 @@ def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-def run_tshark(file_path, display_filter):
-    command = [
-        "tshark",
-        "-r", file_path,
-        "-Y", display_filter,
-        "-T", "fields",
-        "-e", "ip.src",
-        "-e", "ip.dst",
-        "-e", "tcp.srcport",
-        "-e", "tcp.dstport",
-        "-E", "separator=,"
+def save_latest_analysis(data):
+    os.makedirs(EVIDENCE_FOLDER, exist_ok=True)
+
+    with open(LATEST_FILE, "w", encoding="utf-8") as file:
+        json.dump(data, file, indent=4)
+
+
+def load_latest_analysis():
+    if not os.path.exists(LATEST_FILE):
+        return None
+
+    with open(LATEST_FILE, "r", encoding="utf-8") as file:
+        return json.load(file)
+
+
+def detect_port(info_text, port):
+    patterns = [
+        rf"→\s*{port}\b",
+        rf"->\s*{port}\b",
+        rf"\b{port}\s*→",
+        rf"\b{port}\s*->",
+        rf":{port}\b",
+        rf"port\s*{port}\b",
+        rf"\b{port}\s+\[",
+        rf"\b{port}\b",
     ]
 
-    try:
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            timeout=20
-        )
-        return result.stdout.strip().splitlines()
-    except Exception as error:
-        return [f"ERROR,{str(error)},,"]
+    return any(re.search(pattern, info_text, re.IGNORECASE) for pattern in patterns)
 
 
-def analyze_pcap(file_path):
-    ssh_22_rows = run_tshark(file_path, "tcp.port == 22")
-    ssh_2222_rows = run_tshark(file_path, "tcp.port == 2222")
-    tcp_rows = run_tshark(file_path, "tcp")
+def analyze_csv(file_path, filename):
+    df = pd.read_csv(file_path)
+    columns = list(df.columns)
+
+    source_col = "Source" if "Source" in columns else None
+    destination_col = "Destination" if "Destination" in columns else None
+    protocol_col = "Protocol" if "Protocol" in columns else None
+    info_col = "Info" if "Info" in columns else None
+
+    if not info_col:
+        return {
+            "filename": filename,
+            "valid": False,
+            "status": "Invalid CSV",
+            "risk_level": "High",
+            "score": 0,
+            "finding": "CSV tidak memiliki kolom Info dari Wireshark.",
+            "recommendation": "Export ulang CSV dari Wireshark dengan kolom No., Time, Source, Destination, Protocol, Length, dan Info.",
+            "total_packets": int(len(df)),
+            "detected_22": False,
+            "detected_2222": False,
+            "ssh_packets": 0,
+            "top_protocols": [],
+            "top_ips": [],
+            "rows": [],
+        }
+
+    df["Info"] = df[info_col].astype(str)
+    all_info = " ".join(df["Info"].tolist())
+
+    detected_22 = detect_port(all_info, "22")
+    detected_2222 = detect_port(all_info, "2222")
+
+    if protocol_col:
+        ssh_rows = df[df[protocol_col].astype(str).str.contains("SSH", case=False, na=False)]
+        top_protocols = df[protocol_col].astype(str).value_counts().head(5)
+    else:
+        ssh_rows = df[df["Info"].str.contains("SSH", case=False, na=False)]
+        top_protocols = pd.Series(dtype=int)
 
     ip_counter = Counter()
-    conversations = []
 
-    for row in tcp_rows[:100]:
-        parts = row.split(",")
-        if len(parts) >= 4:
-            src_ip, dst_ip, src_port, dst_port = parts[:4]
+    if source_col:
+        ip_counter.update(df[source_col].dropna().astype(str).tolist())
 
-            if src_ip:
-                ip_counter[src_ip] += 1
-            if dst_ip:
-                ip_counter[dst_ip] += 1
-
-            conversations.append({
-                "src_ip": src_ip,
-                "dst_ip": dst_ip,
-                "src_port": src_port,
-                "dst_port": dst_port,
-            })
-
-    detected_22 = len([row for row in ssh_22_rows if row.strip()]) > 0
-    detected_2222 = len([row for row in ssh_2222_rows if row.strip()]) > 0
+    if destination_col:
+        ip_counter.update(df[destination_col].dropna().astype(str).tolist())
 
     if detected_22 and not detected_2222:
-        risk_level = "High"
         status = "Before Hardening"
-        finding = "SSH traffic detected on default port 22."
-        recommendation = "Move SSH to a non-default port such as 2222, disable root login, use key-based authentication, and restrict firewall rules."
-    elif detected_2222 and not detected_22:
-        risk_level = "Low"
-        status = "After Hardening"
-        finding = "SSH traffic detected on hardened non-default port 2222."
-        recommendation = "Maintain firewall allow rule only for the hardened SSH port and continue monitoring logs."
-    elif detected_22 and detected_2222:
-        risk_level = "Medium"
-        status = "Mixed Capture"
-        finding = "Both default SSH port 22 and hardened SSH port 2222 were detected."
-        recommendation = "Verify that port 22 is fully disabled or blocked after migration to port 2222."
-    else:
-        risk_level = "Informational"
-        status = "No SSH Evidence"
-        finding = "No SSH traffic was detected on port 22 or 2222."
-        recommendation = "Capture SSH testing traffic again or verify whether the capture file contains the correct interface traffic."
+        risk_level = "High"
+        score = 35
+        finding = "SSH masih menggunakan port default 22. Ini berarti akses remote server masih mudah ditebak dan perlu hardening."
+        recommendation = "Block port 22, pindahkan SSH ke port 2222, gunakan SSH key, dan aktifkan firewall default deny."
 
-    top_ips = ip_counter.most_common(5)
+    elif detected_2222 and not detected_22:
+        status = "After Hardening"
+        risk_level = "Low"
+        score = 85
+        finding = "SSH sudah terdeteksi pada port 2222. Ini menunjukkan akses remote sudah lebih aman dari konfigurasi default."
+        recommendation = "Pertahankan port 2222, pastikan port 22 tetap diblokir, dan review log login secara berkala."
+
+    elif detected_22 and detected_2222:
+        status = "Mixed Evidence"
+        risk_level = "Medium"
+        score = 60
+        finding = "CSV menunjukkan port 22 dan 2222 sama-sama muncul. Kemungkinan data berisi kondisi sebelum dan sesudah hardening."
+        recommendation = "Pisahkan capture before dan after, lalu pastikan port 22 benar-benar tidak muncul setelah hardening."
+
+    else:
+        status = "No SSH Evidence"
+        risk_level = "Informational"
+        score = 50
+        finding = "CSV tidak menunjukkan bukti SSH port 22 atau 2222."
+        recommendation = "Capture ulang traffic saat Windows mencoba SSH ke Kali Linux server."
+
+    preview_cols = [
+        c for c in ["No.", "Time", "Source", "Destination", "Protocol", "Length", "Info"]
+        if c in columns
+    ]
+
+    rows = df[preview_cols].head(12).fillna("").to_dict(orient="records")
 
     return {
+        "filename": filename,
+        "valid": True,
         "status": status,
         "risk_level": risk_level,
+        "score": score,
         "finding": finding,
         "recommendation": recommendation,
-        "detected_22": detected_22,
-        "detected_2222": detected_2222,
-        "ssh_22_count": len(ssh_22_rows),
-        "ssh_2222_count": len(ssh_2222_rows),
-        "top_ips": top_ips,
-        "conversations": conversations[:20],
+        "total_packets": int(len(df)),
+        "detected_22": bool(detected_22),
+        "detected_2222": bool(detected_2222),
+        "ssh_packets": int(len(ssh_rows)),
+        "top_protocols": [[str(k), int(v)] for k, v in top_protocols.items()],
+        "top_ips": [[str(k), int(v)] for k, v in ip_counter.most_common(5)],
+        "rows": rows,
     }
+
+def run_ssh_command(host, username, password, command):
+    try:
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        ssh.connect(
+            hostname=host,
+            username=username,
+            password=password,
+            timeout=10
+        )
+
+        stdin, stdout, stderr = ssh.exec_command(command)
+
+        output = stdout.read().decode("utf-8", errors="ignore")
+        error = stderr.read().decode("utf-8", errors="ignore")
+
+        ssh.close()
+
+        if error:
+            return {
+                "success": False,
+                "output": error
+            }
+
+        return {
+            "success": True,
+            "output": output
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "output": str(e)
+        }
 
 
 @app.route("/")
 def dashboard():
-    summary = {
-        "app_name": APP_NAME,
-        "security_score": 45,
-        "firewall_status": "Not Checked",
-        "ssh_status": "Not Checked",
-        "wireshark_status": "Ready for analysis",
-    }
+    latest = load_latest_analysis()
+
+    if not latest:
+        summary = {
+            "has_data": False,
+            "security_score": "-",
+            "risk_level": "No Data",
+            "status": "No Evidence Uploaded",
+            "finding": "Belum ada data. Upload CSV Wireshark dulu di menu Analyzer.",
+        }
+    else:
+        summary = {
+            "has_data": True,
+            "security_score": latest["score"],
+            "risk_level": latest["risk_level"],
+            "status": latest["status"],
+            "finding": latest["finding"],
+        }
+
     return render_template("dashboard.html", summary=summary)
 
 
@@ -122,42 +215,205 @@ def dashboard():
 def analyzer():
     analysis = None
     error = None
-    filename = None
 
     if request.method == "POST":
-        if "pcap_file" not in request.files:
-            error = "No file part found."
-        else:
-            file = request.files["pcap_file"]
+        file = request.files.get("csv_file")
 
-            if file.filename == "":
-                error = "No file selected."
-            elif file and allowed_file(file.filename):
-                filename = file.filename
-                save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-                file.save(save_path)
-                analysis = analyze_pcap(save_path)
-            else:
-                error = "Invalid file type. Please upload .pcap or .pcapng file."
+        if not file or file.filename == "":
+            error = "Pilih file CSV dulu."
+
+        elif not allowed_file(file.filename):
+            error = "Format salah. Upload file Wireshark .csv."
+
+        else:
+            os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+            filename = file.filename
+            save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+            file.save(save_path)
+
+            analysis = analyze_csv(save_path, filename)
+            save_latest_analysis(analysis)
 
     return render_template(
         "analyzer.html",
         analysis=analysis,
         error=error,
-        filename=filename
+        latest=load_latest_analysis()
     )
 
 
 @app.route("/controller")
 def controller():
-    return render_template("controller.html")
+    latest = load_latest_analysis()
+
+    if not latest:
+        return render_template(
+            "controller.html",
+            latest=None,
+            message="Belum ada data. Upload CSV Wireshark dulu di menu Analyzer.",
+            rules=[],
+            commands=[],
+            suspicious_ips=[]
+        )
+
+    suspicious_ips = latest.get("top_ips", [])[:5]
+
+    commands = []
+
+    if latest.get("detected_22"):
+        commands.extend([
+            {
+                "title": "Block Default SSH Port 22",
+                "desc": "Menutup SSH port default 22 agar server tidak mudah ditebak.",
+                "command": "sudo ufw deny 22/tcp"
+            },
+            {
+                "title": "Allow Hardened SSH Port 2222",
+                "desc": "Membuka port SSH hardened untuk remote access yang lebih aman.",
+                "command": "sudo ufw allow 2222/tcp"
+            },
+            {
+                "title": "Default Deny Incoming",
+                "desc": "Menolak semua traffic masuk kecuali yang diizinkan.",
+                "command": "sudo ufw default deny incoming"
+            },
+        ])
+
+    for ip, count in suspicious_ips:
+        commands.append({
+            "title": f"Block IP {ip}",
+            "desc": f"IP ini muncul {count} kali pada traffic CSV. Gunakan jika dianggap mencurigakan.",
+            "command": f"sudo ufw deny from {ip}"
+        })
+
+    if latest.get("detected_22"):
+        message = "Controller membaca hasil Analyzer: SSH port 22 terdeteksi. Firewall hardening diperlukan."
+        rules = [
+            "Block inbound traffic to 22/tcp",
+            "Allow inbound traffic only to 2222/tcp",
+            "Set default deny incoming traffic",
+            "Review top IP addresses from CSV evidence",
+            "Capture ulang setelah hardening untuk bukti after"
+        ]
+
+    elif latest.get("detected_2222"):
+        message = "Controller membaca hasil Analyzer: SSH port 2222 terdeteksi. Konfigurasi lebih aman, tetap perlu monitoring."
+        rules = [
+            "Keep 2222/tcp allowed",
+            "Keep 22/tcp blocked",
+            "Monitor failed login attempts",
+            "Review firewall rule regularly"
+        ]
+
+    else:
+        message = "Controller membaca hasil Analyzer: belum ada bukti SSH. Capture ulang traffic SSH diperlukan."
+        rules = [
+            "Verify CSV was exported from correct Wireshark capture",
+            "Check source and destination IP",
+            "Run SSH testing traffic again",
+            "Upload new CSV after testing"
+        ]
+
+    return render_template(
+        "controller.html",
+        latest=latest,
+        message=message,
+        rules=rules,
+        commands=commands,
+        suspicious_ips=suspicious_ips
+    )
+
+@app.route("/run-command", methods=["POST"])
+def run_command():
+    host = request.form.get("host")
+    username = request.form.get("username")
+    password = request.form.get("password")
+    command = request.form.get("command")
+
+    result = run_ssh_command(host, username, password, command)
+
+    latest = load_latest_analysis()
+
+    if latest:
+        suspicious_ips = latest.get("top_ips", [])[:5]
+    else:
+        suspicious_ips = []
+
+    return render_template(
+        "controller.html",
+        latest=latest,
+        rules=["Command executed from Windows webapp to Kali Linux server."],
+        message="Live Kali Control result:",
+        commands=[],
+        suspicious_ips=suspicious_ips,
+        ssh_result=result,
+        executed_command=command
+    )
 
 
 @app.route("/validator")
 def validator():
-    return render_template("validator.html")
+    latest = load_latest_analysis()
+
+    if not latest:
+        return render_template(
+            "validator.html",
+            latest=None,
+            level="Need Evidence",
+            score="-",
+            checklist=[
+                ["Wireshark Evidence", "No CSV uploaded", "warning"],
+                ["SSH Port", "Unknown", "warning"],
+                ["Firewall Rule", "Unknown", "warning"],
+                ["Zero-Trust Status", "Not evaluated", "warning"],
+            ]
+        )
+
+    if latest.get("detected_2222") and not latest.get("detected_22"):
+        level = "More Secure"
+        score = 85
+        checklist = [
+            ["Wireshark Evidence", "CSV analyzed", "safe"],
+            ["SSH Port", "2222 detected", "safe"],
+            ["Default Port 22", "Not detected", "safe"],
+            ["Firewall Rule", "Allow only 2222/tcp", "safe"],
+            ["Root Login", "Must be disabled manually", "warning"],
+            ["Password Auth", "Use SSH key-based auth", "warning"],
+        ]
+
+    elif latest.get("detected_22"):
+        level = "Not Secure"
+        score = 35
+        checklist = [
+            ["Wireshark Evidence", "CSV analyzed", "safe"],
+            ["SSH Port", "Default port 22 detected", "danger"],
+            ["Default Port 22", "Still exposed", "danger"],
+            ["Firewall Rule", "Block 22/tcp needed", "danger"],
+            ["Root Login", "Check sshd_config", "warning"],
+            ["Password Auth", "Disable after key setup", "warning"],
+        ]
+
+    else:
+        level = "Partial Evidence"
+        score = 50
+        checklist = [
+            ["Wireshark Evidence", "CSV analyzed", "safe"],
+            ["SSH Port", "No SSH evidence", "warning"],
+            ["Default Port 22", "Not found in CSV", "warning"],
+            ["Firewall Rule", "Need further testing", "warning"],
+        ]
+
+    return render_template(
+        "validator.html",
+        latest=latest,
+        level=level,
+        score=score,
+        checklist=checklist
+    )
 
 
 if __name__ == "__main__":
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    os.makedirs(EVIDENCE_FOLDER, exist_ok=True)
+    app.run(host="127.0.0.1", port=5000, debug=True)

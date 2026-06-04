@@ -1,0 +1,167 @@
+{
+    "filename": "TitikTengahWifi.csv",
+    "valid": true,
+    "status": "Before Hardening",
+    "risk_level": "High",
+    "score": 35,
+    "finding": "SSH masih menggunakan port default 22. Ini berarti akses remote server masih mudah ditebak dan perlu hardening.",
+    "recommendation": "Block port 22, pindahkan SSH ke port 2222, gunakan SSH key, dan aktifkan firewall default deny.",
+    "total_packets": 77716,
+    "detected_22": true,
+    "detected_2222": false,
+    "ssh_packets": 0,
+    "top_protocols": [
+        [
+            "QUIC",
+            47115
+        ],
+        [
+            "TCP",
+            15234
+        ],
+        [
+            "DNS",
+            2904
+        ],
+        [
+            "MDNS",
+            2755
+        ],
+        [
+            "TLSv1.3",
+            2681
+        ]
+    ],
+    "top_ips": [
+        [
+            "192.168.18.44",
+            70206
+        ],
+        [
+            "182.253.114.161",
+            27770
+        ],
+        [
+            "192.168.18.1",
+            8675
+        ],
+        [
+            "57.144.100.192",
+            5901
+        ],
+        [
+            "146.75.47.42",
+            5802
+        ]
+    ],
+    "rows": [
+        {
+            "No.": 1,
+            "Time": 0.0,
+            "Source": "192.168.18.44",
+            "Destination": "23.215.35.25",
+            "Protocol": "UDP",
+            "Length": 981,
+            "Info": "54955  >  443 Len=939"
+        },
+        {
+            "No.": 2,
+            "Time": 0.014605,
+            "Source": "Ubiquiti_23:54:f3",
+            "Destination": "Broadcast",
+            "Protocol": "ARP",
+            "Length": 42,
+            "Info": "Who has 192.168.18.222? Tell 192.168.18.4"
+        },
+        {
+            "No.": 3,
+            "Time": 0.052412,
+            "Source": "23.215.35.25",
+            "Destination": "192.168.18.44",
+            "Protocol": "UDP",
+            "Length": 71,
+            "Info": "443  >  54955 Len=29"
+        },
+        {
+            "No.": 4,
+            "Time": 0.085613,
+            "Source": "192.168.18.44",
+            "Destination": "23.215.35.25",
+            "Protocol": "UDP",
+            "Length": 75,
+            "Info": "54955  >  443 Len=33"
+        },
+        {
+            "No.": 5,
+            "Time": 0.097322,
+            "Source": "192.168.18.44",
+            "Destination": "192.168.18.1",
+            "Protocol": "DNS",
+            "Length": 77,
+            "Info": "Standard query 0x357d A www.wireshark.org"
+        },
+        {
+            "No.": 6,
+            "Time": 0.098544,
+            "Source": "192.168.18.44",
+            "Destination": "192.168.18.1",
+            "Protocol": "DNS",
+            "Length": 81,
+            "Info": "Standard query 0x1a80 HTTPS config.edge.skype.com"
+        },
+        {
+            "No.": 7,
+            "Time": 0.098879,
+            "Source": "192.168.18.44",
+            "Destination": "192.168.18.1",
+            "Protocol": "DNS",
+            "Length": 81,
+            "Info": "Standard query 0x8456 A config.edge.skype.com"
+        },
+        {
+            "No.": 8,
+            "Time": 0.101281,
+            "Source": "192.168.18.1",
+            "Destination": "192.168.18.44",
+            "Protocol": "DNS",
+            "Length": 125,
+            "Info": "Standard query response 0x357d A www.wireshark.org A 104.26.11.240 A 172.67.75.39 A 104.26.10.240"
+        },
+        {
+            "No.": 9,
+            "Time": 0.105785,
+            "Source": "192.168.18.1",
+            "Destination": "192.168.18.44",
+            "Protocol": "DNS",
+            "Length": 313,
+            "Info": "Standard query response 0x1a80 HTTPS config.edge.skype.com CNAME config.edge.skype.com.trafficmanager.net CNAME ln-0007.config.skype.com CNAME config-edge-skype.ln-0007.ln-msedge.net CNAME ln-0007.ln-msedge.net SOA ns1.ln-msedge.net"
+        },
+        {
+            "No.": 10,
+            "Time": 0.106016,
+            "Source": "192.168.18.44",
+            "Destination": "192.168.18.1",
+            "Protocol": "DNS",
+            "Length": 77,
+            "Info": "Standard query 0x26db HTTPS www.wireshark.org"
+        },
+        {
+            "No.": 11,
+            "Time": 0.106331,
+            "Source": "192.168.18.44",
+            "Destination": "192.168.18.1",
+            "Protocol": "DNS",
+            "Length": 77,
+            "Info": "Standard query 0xdd23 A www.wireshark.org"
+        },
+        {
+            "No.": 12,
+            "Time": 0.107468,
+            "Source": "192.168.18.1",
+            "Destination": "192.168.18.44",
+            "Protocol": "DNS",
+            "Length": 256,
+            "Info": "Standard query response 0x8456 A config.edge.skype.com CNAME config.edge.skype.com.trafficmanager.net CNAME ln-0007.config.skype.com CNAME config-edge-skype.ln-0007.ln-msedge.net CNAME ln-0007.ln-msedge.net A 150.171.22.17"
+        }
+    ]
+}

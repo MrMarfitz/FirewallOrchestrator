@@ -1,58 +1,83 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="hero">
-    <h2>Firewall Orchestrator Dashboard</h2>
-    <p>
-        A local defense dashboard for small enterprise network assessment,
-        firewall rule control, SSH hardening validation, and Wireshark evidence analysis.
-    </p>
+<section class="topbar">
+    <button class="back-btn">←</button>
+    <div class="search-box">Small Enterprise Network Defense</div>
 </section>
 
-<section class="grid">
-    <div class="card">
-        <h3>Security Score</h3>
-        <div class="score">{{ summary.security_score }}/100</div>
-        <p>Initial baseline score before complete hardening.</p>
+<section class="page-title">
+    <h2>Security Overview</h2>
+</section>
+
+<section class="hero-grid">
+    <div class="main-panel yellow">
+        <div>
+            <p class="pill">Protected Server</p>
+            <h3>Kali Linux Server</h3>
+            <p>
+                Server perusahaan kecil yang dilindungi dari akses tidak sah melalui
+                firewall rule, SSH hardening, dan analisis traffic Wireshark.
+            </p>
+        </div>
+
+        <div class="mini-stats">
+            <div>
+                <strong>{{ summary.security_score }}</strong>
+                <span>Score</span>
+            </div>
+            <div>
+                <strong>{{ summary.risk_level }}</strong>
+                <span>Risk</span>
+            </div>
+            <div>
+                <strong>{{ summary.status }}</strong>
+                <span>Status</span>
+            </div>
+        </div>
     </div>
 
-    <div class="card">
-        <h3>Firewall Status</h3>
-        <span class="badge warning">{{ summary.firewall_status }}</span>
-        <p>UFW and traffic control status will be displayed here.</p>
-    </div>
-
-    <div class="card">
-        <h3>SSH Status</h3>
-        <span class="badge warning">{{ summary.ssh_status }}</span>
-        <p>Zero-trust SSH configuration will be validated here.</p>
-    </div>
-
-    <div class="card">
-        <h3>Wireshark Evidence</h3>
-        <span class="badge neutral">{{ summary.wireshark_status }}</span>
-        <p>Upload and analyze .pcap or .pcapng files.</p>
+    <div class="side-panel orange">
+        <p class="pill">Current Finding</p>
+        <h3>{{ summary.finding }}</h3>
     </div>
 </section>
 
-<section class="card wide">
-    <h3>Core Features</h3>
+<section class="section-head">
+    <h2>3 Main Features</h2>
+    <span>Simple for demo, clear for evaluation</span>
+</section>
 
-    <div class="feature-list">
-        <div>
-            <h4>1. Network Assessment & Wireshark Analyzer</h4>
-            <p>Analyze packet capture files, detect SSH traffic, identify source/destination IP, and classify risk.</p>
-        </div>
-
-        <div>
-            <h4>2. Dynamic Rule Engine / The Controller</h4>
-            <p>Recommend firewall rules based on open ports, security findings, and hardening requirements.</p>
-        </div>
-
-        <div>
-            <h4>3. Zero-Trust Identity Gate / The Validator</h4>
-            <p>Validate SSH hardening such as non-default port, disabled root login, and key-based access.</p>
-        </div>
+<section class="feature-row">
+    <div class="feature-card pink">
+        <h3>1. Wireshark Analyzer</h3>
+        <p>Upload CSV dari Wireshark untuk mendeteksi port SSH, IP endpoint, protokol, dan risk level.</p>
+        <a href="/analyzer">Open Analyzer →</a>
     </div>
+
+    <div class="feature-card cyan">
+        <h3>2. Dynamic Rule Engine</h3>
+        <p>Mengubah hasil analisis menjadi rekomendasi firewall yang mudah dipahami.</p>
+        <a href="/controller">Open Rule Engine →</a>
+    </div>
+
+    <div class="feature-card yellow-soft">
+        <h3>3. Zero-Trust Identity Gate</h3>
+        <p>Validasi apakah remote access server sudah sesuai prinsip zero-trust SSH hardening.</p>
+        <a href="/validator">Open Identity Gate →</a>
+    </div>
+</section>
+
+<section class="section-head">
+    <h2>Demo Flow</h2>
+</section>
+
+<section class="timeline">
+    <div>1. Upload CSV before hardening</div>
+    <div>2. App detects SSH port 22</div>
+    <div>3. Rule Engine recommends firewall plan</div>
+    <div>4. Harden Kali server manually</div>
+    <div>5. Upload CSV after hardening</div>
+    <div>6. App shows lower risk</div>
 </section>
 {% endblock %}
