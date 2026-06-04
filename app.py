@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import platform
 import subprocess
 import pandas as pd
 from collections import Counter
@@ -11,6 +12,7 @@ app = Flask(__name__)
 UPLOAD_FOLDER = "uploads"
 EVIDENCE_FOLDER = "evidence"
 LATEST_FILE = os.path.join(EVIDENCE_FOLDER, "latest_analysis.json")
+COMPARE_FILE = os.path.join(EVIDENCE_FOLDER, "compare_analysis.json")
 ALLOWED_EXTENSIONS = {"csv"}
 
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
@@ -20,18 +22,26 @@ def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-def save_latest_analysis(data):
+def save_json(path, data):
     os.makedirs(EVIDENCE_FOLDER, exist_ok=True)
-    with open(LATEST_FILE, "w", encoding="utf-8") as file:
+    with open(path, "w", encoding="utf-8") as file:
         json.dump(data, file, indent=4)
 
 
-def load_latest_analysis():
-    if not os.path.exists(LATEST_FILE):
+def load_json(path):
+    if not os.path.exists(path):
         return None
 
-    with open(LATEST_FILE, "r", encoding="utf-8") as file:
+    with open(path, "r", encoding="utf-8") as file:
         return json.load(file)
+
+
+def save_latest_analysis(data):
+    save_json(LATEST_FILE, data)
+
+
+def load_latest_analysis():
+    return load_json(LATEST_FILE)
 
 
 def detect_port(info_text, port):
@@ -43,8 +53,8 @@ def detect_port(info_text, port):
         rf":{port}\b",
         rf"port\s*{port}\b",
         rf"\b{port}\s+\[",
-        rf"\b{port}\b",
     ]
+
     return any(re.search(pattern, info_text, re.IGNORECASE) for pattern in patterns)
 
 
@@ -102,18 +112,21 @@ def analyze_csv(file_path, filename):
         score = 35
         finding = "SSH masih menggunakan port default 22. Ini berarti akses remote server masih mudah ditebak dan perlu hardening."
         recommendation = "Block port 22, pindahkan SSH ke port 2222, gunakan SSH key, dan aktifkan firewall default deny."
+
     elif detected_2222 and not detected_22:
         status = "After Hardening"
         risk_level = "Low"
         score = 85
         finding = "SSH sudah terdeteksi pada port 2222. Ini menunjukkan akses remote sudah lebih aman dari konfigurasi default."
         recommendation = "Pertahankan port 2222, pastikan port 22 tetap diblokir, dan review log login secara berkala."
+
     elif detected_22 and detected_2222:
         status = "Mixed Evidence"
         risk_level = "Medium"
         score = 60
         finding = "CSV menunjukkan port 22 dan 2222 sama-sama muncul. Kemungkinan data berisi kondisi sebelum dan sesudah hardening."
         recommendation = "Pisahkan capture before dan after, lalu pastikan port 22 benar-benar tidak muncul setelah hardening."
+
     else:
         status = "No SSH Evidence"
         risk_level = "Informational"
@@ -147,6 +160,12 @@ def analyze_csv(file_path, filename):
 
 
 def run_local_command(command):
+    if platform.system().lower() == "windows":
+        return {
+            "success": False,
+            "output": "Live Kali Control hanya jalan saat app dijalankan langsung di Kali Linux. Di Windows, gunakan fitur Analyzer, Compare, dan Report."
+        }
+
     allowed_commands = [
         "hostname -I",
         "/usr/sbin/ufw status verbose",
@@ -155,7 +174,7 @@ def run_local_command(command):
         "/usr/sbin/ufw default deny incoming",
         "/usr/sbin/ufw default allow outgoing",
         "/usr/sbin/ufw --force enable",
-        "ss -tulnp",
+        "/usr/bin/ss -tulnp",
     ]
 
     if command not in allowed_commands:
@@ -221,8 +240,10 @@ def analyzer():
 
         if not file or file.filename == "":
             error = "Pilih file CSV dulu."
+
         elif not allowed_file(file.filename):
             error = "Format salah. Upload file Wireshark .csv."
+
         else:
             os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -238,6 +259,88 @@ def analyzer():
         analysis=analysis,
         error=error,
         latest=load_latest_analysis()
+    )
+
+
+@app.route("/compare", methods=["GET", "POST"])
+def compare():
+    before_analysis = None
+    after_analysis = None
+    comparison = None
+    error = None
+
+    if request.method == "POST":
+        before_file = request.files.get("before_csv")
+        after_file = request.files.get("after_csv")
+
+        if not before_file or before_file.filename == "":
+            error = "Upload Before Hardening CSV dulu."
+
+        elif not after_file or after_file.filename == "":
+            error = "Upload After Hardening CSV dulu."
+
+        elif not allowed_file(before_file.filename) or not allowed_file(after_file.filename):
+            error = "Format salah. Upload file .csv dari Wireshark."
+
+        else:
+            os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+            os.makedirs(EVIDENCE_FOLDER, exist_ok=True)
+
+            before_path = os.path.join(UPLOAD_FOLDER, "before_" + before_file.filename)
+            after_path = os.path.join(UPLOAD_FOLDER, "after_" + after_file.filename)
+
+            before_file.save(before_path)
+            after_file.save(after_path)
+
+            before_analysis = analyze_csv(before_path, before_file.filename)
+            after_analysis = analyze_csv(after_path, after_file.filename)
+
+            score_diff = after_analysis["score"] - before_analysis["score"]
+
+            if before_analysis["detected_22"] and after_analysis["detected_2222"] and not after_analysis["detected_22"]:
+                result = "Hardening berhasil. Bukti before menunjukkan port 22, sedangkan bukti after menunjukkan SSH berpindah ke port 2222."
+                improvement = "Risk reduced"
+
+            elif before_analysis["detected_22"] and after_analysis["detected_22"]:
+                result = "Hardening belum berhasil. Port 22 masih terdeteksi pada file after."
+                improvement = "No clear improvement"
+
+            elif after_analysis["detected_2222"]:
+                result = "After CSV menunjukkan SSH hardened port 2222. Kondisi lebih aman dibanding konfigurasi default."
+                improvement = "Improved"
+
+            else:
+                result = "Belum ada bukti SSH yang cukup pada file after. Perlu capture ulang saat testing SSH."
+                improvement = "Need more evidence"
+
+            comparison = {
+                "before_score": before_analysis["score"],
+                "after_score": after_analysis["score"],
+                "score_diff": score_diff,
+                "before_status": before_analysis["status"],
+                "after_status": after_analysis["status"],
+                "before_risk": before_analysis["risk_level"],
+                "after_risk": after_analysis["risk_level"],
+                "before_port22": before_analysis["detected_22"],
+                "after_port22": after_analysis["detected_22"],
+                "before_port2222": before_analysis["detected_2222"],
+                "after_port2222": after_analysis["detected_2222"],
+                "result": result,
+                "improvement": improvement,
+            }
+
+            save_json(COMPARE_FILE, {
+                "before": before_analysis,
+                "after": after_analysis,
+                "comparison": comparison
+            })
+
+    return render_template(
+        "compare.html",
+        before_analysis=before_analysis,
+        after_analysis=after_analysis,
+        comparison=comparison,
+        error=error
     )
 
 
@@ -288,7 +391,7 @@ def controller():
         {
             "title": "Check Open Ports",
             "desc": "Melihat port yang terbuka di Kali.",
-            "command": "ss -tulnp"
+            "command": "/usr/bin/ss -tulnp"
         }
     ]
 
@@ -301,6 +404,7 @@ def controller():
             "Review top IP addresses from CSV evidence",
             "Capture ulang setelah hardening untuk bukti after"
         ]
+
     elif latest.get("detected_2222"):
         message = "Controller membaca hasil Analyzer: SSH port 2222 terdeteksi. Konfigurasi lebih aman, tetap perlu monitoring."
         rules = [
@@ -309,6 +413,7 @@ def controller():
             "Monitor failed login attempts",
             "Review firewall rule regularly"
         ]
+
     else:
         message = "Controller membaca hasil Analyzer: belum ada bukti SSH. Capture ulang traffic SSH diperlukan."
         rules = [
@@ -336,15 +441,7 @@ def run_command():
     result = run_local_command(command)
 
     latest = load_latest_analysis()
-
-    if latest:
-        suspicious_ips = latest.get("top_ips", [])[:5]
-        rules = ["Command executed locally on Kali Linux server."]
-        message = "Local Kali Control result:"
-    else:
-        suspicious_ips = []
-        rules = ["Command executed locally on Kali Linux server."]
-        message = "Local Kali Control result:"
+    suspicious_ips = latest.get("top_ips", [])[:5] if latest else []
 
     commands = [
         {
@@ -375,15 +472,15 @@ def run_command():
         {
             "title": "Check Open Ports",
             "desc": "Melihat port yang terbuka di Kali.",
-            "command": "ss -tulnp"
+            "command": "/usr/bin/ss -tulnp"
         }
     ]
 
     return render_template(
         "controller.html",
         latest=latest,
-        rules=rules,
-        message=message,
+        rules=["Command executed locally on Kali Linux server."],
+        message="Local Kali Control result:",
         commands=commands,
         suspicious_ips=suspicious_ips,
         ssh_result=result,
@@ -420,6 +517,7 @@ def validator():
             ["Root Login", "Must be disabled manually", "warning"],
             ["Password Auth", "Use SSH key-based auth", "warning"],
         ]
+
     elif latest.get("detected_22"):
         level = "Not Secure"
         score = 35
@@ -431,6 +529,7 @@ def validator():
             ["Root Login", "Check sshd_config", "warning"],
             ["Password Auth", "Disable after key setup", "warning"],
         ]
+
     else:
         level = "Partial Evidence"
         score = 50

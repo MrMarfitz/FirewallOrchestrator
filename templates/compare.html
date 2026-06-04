@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="topbar">
+    <div class="search-box">Before vs After Security Evaluation</div>
+</section>
+
+<section class="page-title">
+    <h2>Before vs After</h2>
+</section>
+
+<section class="hero-grid">
+    <div class="main-panel orange">
+        <p class="pill">Evaluation</p>
+        <h3>Hardening Comparison</h3>
+        <p>
+            Upload dua file CSV Wireshark: satu sebelum hardening dan satu sesudah hardening.
+            App akan membandingkan risiko, port SSH, dan peningkatan security score.
+        </p>
+    </div>
+
+    <div class="side-panel yellow-soft">
+        <p class="pill">Goal</p>
+        <h3>Prove the improvement</h3>
+        <p>
+            Bukti terbaik untuk dosen: sebelum ada port 22, sesudah port 22 hilang
+            dan SSH pindah ke port 2222.
+        </p>
+    </div>
+</section>
+
+<section class="info-card">
+    <h3>Upload Evidence</h3>
+
+    <form method="POST" enctype="multipart/form-data" class="compare-form">
+        <div>
+            <label>Before Hardening CSV</label>
+            <input type="file" name="before_csv" accept=".csv" required>
+        </div>
+
+        <div>
+            <label>After Hardening CSV</label>
+            <input type="file" name="after_csv" accept=".csv" required>
+        </div>
+
+        <button type="submit">Compare Evidence</button>
+    </form>
+
+    {% if error %}
+        <div class="error-box">{{ error }}</div>
+    {% endif %}
+</section>
+
+{% if comparison %}
+<section class="stats-grid">
+    <div class="stat-box">
+        <span>Before Score</span>
+        <strong>{{ comparison.before_score }}</strong>
+    </div>
+
+    <div class="stat-box">
+        <span>After Score</span>
+        <strong>{{ comparison.after_score }}</strong>
+    </div>
+
+    <div class="stat-box">
+        <span>Score Change</span>
+        <strong>{{ comparison.score_diff }}</strong>
+    </div>
+
+    <div class="stat-box">
+        <span>Improvement</span>
+        <strong>{{ comparison.improvement }}</strong>
+    </div>
+</section>
+
+<section class="two-col">
+    <div class="info-card">
+        <h3>Before Hardening</h3>
+        <p>Status: <b>{{ comparison.before_status }}</b></p>
+        <p>Risk: <b>{{ comparison.before_risk }}</b></p>
+        <p>Port 22 detected: <b>{{ comparison.before_port22 }}</b></p>
+        <p>Port 2222 detected: <b>{{ comparison.before_port2222 }}</b></p>
+    </div>
+
+    <div class="info-card">
+        <h3>After Hardening</h3>
+        <p>Status: <b>{{ comparison.after_status }}</b></p>
+        <p>Risk: <b>{{ comparison.after_risk }}</b></p>
+        <p>Port 22 detected: <b>{{ comparison.after_port22 }}</b></p>
+        <p>Port 2222 detected: <b>{{ comparison.after_port2222 }}</b></p>
+    </div>
+</section>
+
+<section class="info-card">
+    <h3>Evaluation Result</h3>
+    <p>{{ comparison.result }}</p>
+</section>
+
+<section class="info-card">
+    <h3>Report Summary</h3>
+    <div class="code-block">
+Initial Weakness: SSH remote access was evaluated from Wireshark before-hardening evidence.<br>
+Action Taken: Firewall and SSH hardening were applied using Dynamic Rule Engine recommendations.<br>
+After Evaluation: The after-hardening CSV was compared against the baseline evidence.<br>
+Result: {{ comparison.result }}<br>
+Residual Risk: Internal misuse, weak credentials, and poor log monitoring still need attention.
+    </div>
+</section>
+{% endif %}
+{% endblock %}

@@ -563,3 +563,43 @@ th {
     background: #ff9675;
     color: #111;
 }
+
+.compare-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 14px;
+    align-items: end;
+}
+
+.compare-form label {
+    display: block;
+    font-weight: 900;
+    margin-bottom: 8px;
+}
+
+.compare-form input {
+    width: 100%;
+    background: #fff8e7;
+    border: 2px solid #111;
+    padding: 12px;
+    font-weight: 700;
+}
+
+nav a {
+    font-size: 15px;
+    line-height: 1.25;
+}
+
+nav a span {
+    display: block;
+    margin-top: 3px;
+    font-size: 11px;
+    font-weight: 700;
+    opacity: 0.75;
+}
+
+@media (max-width: 1000px) {
+    .compare-form {
+        grid-template-columns: 1fr;
+    }
+}

@@ -9,18 +9,22 @@
 <body>
     <aside class="sidebar">
         <div class="brand">
-           <div class="logo">
-    <img src="{{ url_for('static', filename='logo.jpg') }}" alt="Firewall Orchestrator Logo">
-</div>
-            
+            <div class="logo">
+                <img src="{{ url_for('static', filename='logo.jpg') }}" alt="Firewall Orchestrator Logo">
+            </div>
+            <div>
+                <h1>Firewall Orchestrator</h1>
+                <p>Defense Assistant</p>
+            </div>
         </div>
 
         <nav>
-    <a href="/"> Dashboard</a>
-    <a href="/analyzer"> Wireshark Analyzer</a>
-    <a href="/controller"> Dynamic Rule Engine<br><span></span></a>
-    <a href="/validator"> Zero-Trust Identity Gate<br><span></span></a>
-</nav>
+            <a href="/">⌂ Dashboard</a>
+            <a href="/analyzer">▣ Wireshark Analyzer</a>
+            <a href="/compare">◈ Before vs After</a>
+            <a href="/controller">⚙ Dynamic Rule Engine<br><span>The Controller</span></a>
+            <a href="/validator">◆ Zero-Trust Identity Gate<br><span>The Validator</span></a>
+        </nav>
 
         <div class="sidebar-note">
             <p>Protected asset</p>
